@@ -47,7 +47,16 @@ setup(
         'linodecli.plugins',
     ],
     license="BSD 3-Clause License",
-    install_requires=["terminaltables","colorclass","requests","PyYAML","enum34"],
+    install_requires=[
+        "terminaltables",
+        "colorclass",
+        "requests",
+        "PyYAML",
+        "future; python_version <= '3.0.0'"
+    ],
+    extras_require={
+        ":python_version<'3.4'": ['enum34'],
+    },
     entry_points={
         "console_scripts": [
             "linode-cli = linodecli:main",

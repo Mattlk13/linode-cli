@@ -154,9 +154,24 @@ def delete_bucket(get_client, args):
 
     parser.add_argument('name', metavar='NAME', type=str,
                         help="The name of the bucket to remove.")
+    parser.add_argument('--recursive', action="store_true",
+                        help="If given, force removal of non-empty buckets by deleting "
+                             "all objects in the bucket before deleting the bucket.  For "
+                             "large buckets, this may take a while.")
 
     parsed = parser.parse_args(args)
     client = get_client()
+
+    if parsed.recursive:
+        try:
+            bucket = client.get_bucket(parsed.name)
+        except S3ResponseError:
+            print('No bucket named '+parsed.name)
+            sys.exit(2)
+
+        for c in bucket.list():
+            print("delete: {} {}".format(parsed.name, c.key))
+            bucket.delete_key(c)
 
     client.delete_bucket(parsed.name)
 
@@ -210,21 +225,22 @@ def upload_object(get_client, args):
         print('No bucket named '+parsed.bucket)
         sys.exit(2)
 
+    policy = 'public-read' if parsed.acl_public else None
+
     for filename, file_path in to_upload:
         k = Key(bucket)
         k.key = filename
 
         print(filename)
-        policy = 'public-read' if parsed.acl_public else None
         k.set_contents_from_filename(file_path, cb=_progress, num_cb=100, policy=policy)
 
     for filename, file_path, file_size in to_multipart_upload:
-        _do_multipart_upload(bucket, filename, file_path, file_size)
+        _do_multipart_upload(bucket, filename, file_path, file_size, policy)
 
     print('Done.')
 
 
-def _do_multipart_upload(bucket, filename, file_path, file_size):
+def _do_multipart_upload(bucket, filename, file_path, file_size, policy):
     """
     Handles the internals of a multipart upload for a large file.
 
@@ -236,8 +252,12 @@ def _do_multipart_upload(bucket, filename, file_path, file_size):
     :type file_path: str
     :param file_size: The size of this file in bytes (used for chunking)
     :type file_size: int
+    :param policy: The canned ACLs to include with the new key once the upload
+                   completes.  None for no ACLs, or "public-read" to make the
+                   key accessible publicly.
+    :type policy: str
     """
-    upload = bucket.initiate_multipart_upload(filename)
+    upload = bucket.initiate_multipart_upload(filename, policy=policy)
 
     num_chunks = int(math.ceil(file_size / MULTIPART_UPLOAD_CHUNK_SIZE))
     upload_exception = None
@@ -683,13 +703,14 @@ def call(args, context):
         os.environ.get(ENV_SECRET_KEY_NAME, None),
     )
 
-    if access_key and not secret_key or secret_key and not access_key:
-        print("You must set both {} and {}, or neither".format(ENV_ACCESS_KEY_NAME, ENV_SECRET_KEY_NAME))
-        exit(1)
+    if not "--help" in args:
+        if access_key and not secret_key or secret_key and not access_key:
+            print("You must set both {} and {}, or neither".format(ENV_ACCESS_KEY_NAME, ENV_SECRET_KEY_NAME))
+            exit(1)
 
-    # not given on command line, so look them up
-    if not access_key:
-        access_key, secret_key = _get_s3_creds(context.client)
+        # not given on command line, so look them up
+        if not access_key:
+            access_key, secret_key = _get_s3_creds(context.client)
 
     cluster = parsed.cluster
     if context.client.defaults:
@@ -707,7 +728,8 @@ def call(args, context):
             exit(1)
 
         if current_cluster is None:
-            print("Error: No default cluster is configured.")
+            print("Error: No default cluster is configured.  Either configure the CLI "
+                  "or invoke with --cluster to specify a cluster.")
             _configure_plugin(context.client)
             current_cluster = context.client.config.plugin_get_value('cluster')
 
@@ -782,6 +804,21 @@ def _get_s3_creds(client, force=False):
 
     if force or access_key is None:
         # this means there are no stored s3 creds for this user - set them up
+
+        # but first - is there actually a config?  If we got this far, creds aren't
+        # being provided by the environment, but if the CLI is running without a
+        # config, we shouldn't generate new keys (or we'd end up doing so with each
+        # request) - instead ask for them to be set up.
+        if client.config.get_value("token") is None:
+            print(
+                "You are running the Linode CLI without a configuration file, but "
+                "object storage keys were not configured.  Please set the following "
+                "variables in your environment: '{}' and '{}'.  If you'd rather ".format(
+                    ENV_ACCESS_KEY_NAME, ENV_SECRET_KEY_NAME
+                )+"configure the CLI, unset the 'LINODE_CLI_TOKEN' environment "
+                "variable and then run `linode-cli configure`."
+            )
+            exit(1)
 
         # before we do anything, can they do object storage?
         status, resp = client.call_operation('account', 'view')

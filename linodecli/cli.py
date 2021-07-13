@@ -297,9 +297,9 @@ class CLI:
         with open(data_file, 'wb') as f:
             pickle.dump(self.ops, f)
 
-    def bake_completions(self):
+    def get_completions(self):
         """
-        Given a baked CLI, generates and saves a bash completion file
+        Generates and returns shell completions based on the baked spec
         """
         completion_template=Template("""# This is a generated file!  Do not modify!
 _linode_cli()
@@ -330,7 +330,13 @@ complete -F _linode_cli linode-cli""")
         command_blocks = [command_template.safe_substitute(command=op, actions=" ".join([act for act in actions.keys()])) for op, actions in self.ops.items()]
         rendered = completion_template.safe_substitute(actions=" ".join(self.ops.keys()),
                                                        command_items="\n        ".join(command_blocks))
+        return rendered
 
+    def bake_completions(self):
+        """
+        Given a baked CLI, generates and saves a bash completion file
+        """
+        rendered = self.get_completions()
         # save it off
         with open('linode-cli.sh', 'w') as f:
             print("Writing file...")
@@ -396,7 +402,7 @@ complete -F _linode_cli linode-cli""")
         headers = {
             'Authorization': "Bearer {}".format(self.config.get_token()),
             'Content-Type': 'application/json',
-            'User-Agent': "linode-cli:{}".format(self.version),
+            'User-Agent': "linode-cli:{} python/{}.{}.{}".format(self.version, version_info[0], version_info[1], version_info[2]),
         }
 
         parsed_args = operation.parse_args(args)

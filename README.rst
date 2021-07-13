@@ -54,10 +54,10 @@ to invoke a specific action, use `--help` for that action::
 
    linode-cli linodes create --help
 
-The first time you invoke the CLI, you will be asked to configure it with a
-token, and optionally select some default values for "region," "image," and "type."
-If you configure these defaults, you may omit them as parameters to actions
-and the default value will be used.
+The first time you invoke the CLI, you will be asked to configure (see
+"Configuration" below for details), and optionally select some default values
+for "region," "image," and "type." If you configure these defaults, you may
+omit them as parameters to actions and the default value will be used.
 
 Common Operations
 ^^^^^^^^^^^^^^^^^
@@ -102,13 +102,26 @@ View your user::
 
    linode-cli profile view
 
-Reconfiguring
+Configuration
 """""""""""""
 
-If your token expires or you want to otherwise change your configuration, simply
-run the *configure* command::
+The first time the CLI runs, it will prompt you to configure it.  The CLI defaults
+to using web-based configuration, which is fast and convenient for users who
+have access to a browser.
 
-   linode-cli configure
+To manually configure the CLI or reconfigure it if your token expires, you can
+run the ``configure`` command::
+
+  linode-cli configure
+
+If you prefer to provide a token directly through the terminal, possibly because
+you don't have access to a browser where you're configuring the CLI, pass the
+``--token`` flag to the configure command as shown::
+
+   linode-cli configure --token
+
+When configuring multiple users using web-based configuration, you may need to
+log out of cloud.linode.com before configuring a second user.
 
 Suppressing Defaults
 """"""""""""""""""""
@@ -128,6 +141,17 @@ In some situations, like when the CLI is out of date, it will generate a warning
 in addition to its normal output.  If these warnings can interfere with your
 scripts or you otherwise want them disabled, simply add the ``--suppress-warnings``
 flag to prevent them from being emitted.
+
+Shell Completion
+""""""""""""""""
+
+To generate a completion file for a given shell type, use the ``completion`` command;
+for example to generate completions for bash run::
+
+   linode-cli completion bash
+
+The output of this command is suitable to be included in the relevant completion
+files to enable command completion on your shell.
 
 Environment Variables
 """""""""""""""""""""
